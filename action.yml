@@ -1,0 +1,72 @@
+name: "PR Review Agent"
+description: "Automated pull request review using GitHub Models (LLM-powered bugs/security/quality/style review)."
+author: "vitalyscherban"
+
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  github-token:
+    description: "Token used to call the GitHub API and GitHub Models inference endpoint. Defaults to the workflow's GITHUB_TOKEN."
+    required: true
+    default: ${{ github.token }}
+  pr-number:
+    description: "Pull request number to review. Defaults to the number of the PR that triggered the workflow."
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  model:
+    description: "GitHub Models model name to use for the review (e.g. gpt-4o-mini, gpt-4o)."
+    required: false
+    default: "gpt-4o-mini"
+  models-endpoint:
+    description: "GitHub Models chat-completions endpoint URL."
+    required: false
+    default: "https://models.inference.ai.azure.com/chat/completions"
+  strictness:
+    description: "Review strictness: lenient, standard, or strict."
+    required: false
+    default: "standard"
+  post-inline-comments:
+    description: "Whether to post inline review comments on changed lines in addition to the summary."
+    required: false
+    default: "true"
+  max-diff-chars:
+    description: "Maximum total characters of diff to include in the LLM prompt."
+    required: false
+    default: "60000"
+  dry-run:
+    description: "If true, print the review to the log instead of posting it to GitHub (useful for testing)."
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r "${{ github.action_path }}/requirements.txt"
+
+    - name: Run PR review agent
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        MODEL_NAME: ${{ inputs.model }}
+        MODELS_ENDPOINT: ${{ inputs.models-endpoint }}
+        REVIEW_STRICTNESS: ${{ inputs.strictness }}
+        POST_INLINE_COMMENTS: ${{ inputs.post-inline-comments }}
+        MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        PYTHONPATH: ${{ github.action_path }}/src
+      run: |
+        python -m pr_review_agent.main

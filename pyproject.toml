@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pr-review-agent"
+version = "0.1.0"
+description = "Automated PR review agent powered by GitHub Models, packaged as a GitHub Action."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "vitalyscherban" },
+]
+dependencies = [
+    "requests>=2.31.0,<3.0.0",
+]
+
+[project.scripts]
+pr-review-agent = "pr_review_agent.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
