@@ -56,6 +56,8 @@ sequenceDiagram
 
 See [docs/architecture.md](docs/architecture.md) for a component-by-component breakdown.
 
+For the full **Azure solution architecture** — including enterprise deployment with Azure OpenAI Service, Private Endpoints, Managed Identity, Azure Key Vault, and observability — see [docs/azure-architecture.md](docs/azure-architecture.md).
+
 ## Setup / Installation
 
 1. Copy this repository's `action.yml`, `src/`, and `requirements.txt` into your target repo (or use this repo directly as a reusable action via `uses: vitalyscherban/pr-review-agent@main`).
@@ -130,12 +132,44 @@ pytest
 
 All GitHub and LLM calls are mocked in tests (via `responses` / monkeypatch) — no network access is required or performed.
 
+## Token Optimization & Cost Savings
+
+The agent makes **one LLM call per PR event** with the following typical token budget:
+
+| Prompt section | Tokens (typical) | Tokens (maximum) |
+|---|---|---|
+| System prompt (fixed) | ~150 | ~210 |
+| PR title + description | ~100 | unbounded |
+| Diff text | ~2,000–8,000 | ~15,000 (60 000-char cap) |
+| **Total input** | **~2,250–8,250** | **~15,400** |
+| **Output** | ~300–500 | 2,000 (hardcoded cap) |
+
+### GitHub Models free tier
+
+The default configuration uses `GITHUB_TOKEN` to call `models.inference.ai.azure.com` — **zero per-token cost**. The key resource is rate-limit quota, not dollars.
+
+### Azure OpenAI Service (enterprise)
+
+When running against Azure OpenAI Service (`gpt-4o-mini`), estimated monthly costs for a 50-developer team are **~$2.07/month** at baseline, reducible to **~$1.19/month (~42% saving)** with the optimizations below.
+
+### Documented optimizations
+
+| Optimization | Saving (50-dev team, Azure OpenAI) | GitHub Models benefit | Effort |
+|---|---|---|---|
+| **Diff hash caching** — skip reviews where diff hasn't changed since last run | **$0.52/month (25%)** | 25% fewer rate-limit calls | Medium |
+| **Smart file filtering** — exclude `*.lock`, generated, and vendored files from the diff | **$0.31/month (12%)** | 12% smaller prompts | Low |
+| **PR description cap** — truncate `pr.body` to 1,000 chars | ~$0.05/month (2%) | Tighter context quality | Very low |
+| **Dynamic `max_tokens`** — scale output ceiling by diff size | Latency reduction | Faster reviews on small PRs | Very low |
+| **Combined** | **~$0.88/month (37%)** | **37% rate-limit headroom freed** | |
+
+Full analysis with cost tables, network architecture, security controls (Managed Identity, Key Vault, Private Endpoints), and recommended Application Insights metrics: [docs/azure-architecture.md](docs/azure-architecture.md).
+
 ## Limitations & roadmap
 
 - Relies on the diff fitting within the configured character budget; very large PRs are truncated rather than fully analyzed.
 - LLM output is parsed as JSON; a malformed response falls back to a plain-text `COMMENT` verdict rather than failing the whole run.
 - No persistent memory across review runs (each run is independent).
-- Roadmap ideas: per-file review chunking with aggregation, caching identical-diff reviews, support for additional GitHub Models, configurable custom prompts/rulesets.
+- Roadmap ideas: diff hash caching to skip unchanged-diff re-reviews, smart file filtering to exclude generated/vendored files, per-file review chunking with aggregation, support for Azure OpenAI Service as an alternative endpoint, configurable custom prompts/rulesets.
 
 ## Contributing
 
